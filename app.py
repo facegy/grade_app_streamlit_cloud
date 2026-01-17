@@ -30,19 +30,38 @@ import os
 # 字体设置 (云端部署专用版)
 # ==========================================
 # 假设您已经把 SimHei.ttf 文件上传到了同级目录
-font_file = 'SimHei.ttf'  # 请确保这个文件名和您上传的文件名完全一致
+import matplotlib.font_manager as fm
+import os
 
-if os.path.exists(font_file):
-    # 手动加载这个字体文件
-    font_prop = fm.FontProperties(fname=font_file)
-    # 将其设为 Matplotlib 的默认字体
-    plt.rcParams['font.family'] = font_prop.get_name()
-    print(f"✅ 成功加载本地字体: {font_file}")
+# ==========================================
+# 字体设置 (GitHub 云端部署修正版)
+# ==========================================
+# 1. 动态获取当前脚本 app.py 所在的目录
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# 2. 拼接字体路径 
+# ⚠️ 关键修正：根据您的 GitHub 截图，文件名必须是全小写的 'simhei.ttf'
+font_path = os.path.join(current_dir, 'simhei.ttf')
+
+if os.path.exists(font_path):
+    # 3. 核心步骤：强制将字体注册到 Matplotlib 管理器中
+    # (这一步解决了 "findfont: Font family not found" 的报错)
+    fm.fontManager.addfont(font_path)
+    
+    # 4. 获取该字体的内部注册名称 (防止它内部叫 'SimHei Regular' 而不是 'SimHei')
+    font_prop = fm.FontProperties(fname=font_path)
+    custom_font_name = font_prop.get_name()
+    
+    # 5. 设置为全局默认字体
+    plt.rcParams['font.family'] = custom_font_name
+    print(f"✅ 成功加载并注册本地字体: {custom_font_name}")
 else:
-    # 本地调试时的回退方案
-    plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'Arial']
-    print("⚠️ 未找到本地字体文件，使用系统默认字体")
+    # 调试信息：如果找不到，打印出来方便排查
+    print(f"⚠️ 未找到字体文件，请检查路径: {font_path}")
+    # 回退方案
+    plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'Arial', 'sans-serif']
 
+# 解决负号显示为方块的问题
 plt.rcParams['axes.unicode_minus'] = False
 
 
