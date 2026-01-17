@@ -1,0 +1,7 @@
+panel
+pandas
+numpy
+matplotlib
+scipy
+openpyxl
+jinja2
