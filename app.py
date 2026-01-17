@@ -21,21 +21,13 @@ COLOR_TEXT = '#1C1C1C'
 COLOR_MAIN = '#004225'
 COLOR_ACCENT = '#D4AF37'
 
-
 import matplotlib.font_manager as fm
 import os
-
 
 # ==========================================
 # 字体设置 (云端部署专用版)
 # ==========================================
-# 假设您已经把 SimHei.ttf 文件上传到了同级目录
-import matplotlib.font_manager as fm
-import os
-
-# ==========================================
-# 字体设置 (GitHub 云端部署修正版)
-# ==========================================
+# 尝试加载本地 SimHei，如果没有则使用备选列表
 FONT_FILE = "SimHei.ttf"
 custom_font = None
 
@@ -44,12 +36,16 @@ if os.path.exists(FONT_FILE):
         fm.fontManager.addfont(FONT_FILE)
         font_prop = fm.FontProperties(fname=FONT_FILE)
         custom_font = font_prop.get_name()
-        print(f"✅ 成功加载本地字体：{custom_font}")
+        # print(f"✅ 成功加载本地字体：{custom_font}") # 调试用
     except Exception as e:
         print(f"⚠️ 字体加载出错：{e}")
 
+# 构建字体优先级列表
 SAFE_FONT_LIST = [custom_font] if custom_font else []
 SAFE_FONT_LIST.extend(["Microsoft YaHei", "SimHei", "WenQuanYi Micro Hei", "DejaVu Sans", "sans-serif"])
+
+plt.rcParams['font.sans-serif'] = SAFE_FONT_LIST
+plt.rcParams['axes.unicode_minus'] = False
 
 
 # ==========================================
@@ -100,38 +96,30 @@ def draw_chart(data, col_name=""):
 
 def update_excel_formatting(df_new, original_file_obj):
     """
-    核心黑科技：
-    打开原始 Excel (保留格式)，将 df_new 的值填入，
-    处理行数变化，最后返回二进制流。
+    核心黑科技：保留格式导出
     """
-    # 1. 重置文件指针，确保从头读取
+    # 1. 重置文件指针
     original_file_obj.seek(0)
     
-    # 2. 使用 openpyxl 加载原始文件 (keep_vba=False, data_only=False 以保留样式)
+    # 2. 加载原始文件
     wb = load_workbook(original_file_obj)
-    ws = wb.active # 默认操作第一个 Sheet
+    ws = wb.active 
     
-    # 3. 将 DataFrame 转换为列表 (不包含表头，因为表头通常不动)
-    # 注意：我们假设列的顺序没有变。如果用户拖拽了列序，这里需要更复杂的逻辑。
-    # 这里我们只更新数据部分（从第2行开始）
+    # 3. 转换数据
     data_rows = df_new.values.tolist()
     
-    # 4. 填入新数据 (保留单元格原有样式)
-    # enumerate 从 0 开始，Excel 行从 2 开始 (1是表头)
+    # 4. 填入新数据
     for row_idx, row_data in enumerate(data_rows):
         excel_row = row_idx + 2 
         for col_idx, value in enumerate(row_data):
             excel_col = col_idx + 1
-            # 更新值，openpyxl 会自动保留该单元格的颜色/字体/边框
             ws.cell(row=excel_row, column=excel_col).value = value
             
-    # 5. 处理行数删除的情况
-    # 如果新数据比老数据少，需要把 Excel 里多余的老数据行删掉
+    # 5. 处理行数删除
     current_max_row = ws.max_row
-    new_data_count = len(data_rows) + 1 # +1 是因为有表头
+    new_data_count = len(data_rows) + 1 
     
     if current_max_row > new_data_count:
-        # 删除多余的行
         ws.delete_rows(new_data_count + 1, amount=(current_max_row - new_data_count))
         
     # 6. 保存到内存
@@ -196,11 +184,7 @@ if uploaded_file is not None:
                     key="data_editor"
                 )
 
-                # ======================================================
-                # 【导出功能升级】使用格式保留逻辑
-                # ======================================================
-                # 调用我们写的 update_excel_formatting 函数
-                # 传入：修改后的数据 + 原始文件对象
+                # 导出逻辑
                 final_buffer = update_excel_formatting(df_edited, uploaded_file)
                 
                 with st.sidebar:
@@ -222,10 +206,43 @@ if uploaded_file is not None:
                     fig, mu, std = draw_chart(clean_data, col_name=target_col)
                     st.pyplot(fig, use_container_width=True)
                     
+                    # --- 基础统计 ---
                     c1, c2, c3 = st.columns(3)
                     c1.metric("平均分", f"{mu:.2f}")
                     c2.metric("标准差", f"{std:.2f}")
                     c3.metric("有效样本", f"{len(clean_data)}")
+
+                    # =================================================
+                    # 新增功能：不及格与优秀比例统计
+                    # =================================================
+                    st.markdown("---")
+                    
+                    # 计算逻辑
+                    fail_count = (clean_data < 60).sum()
+                    fail_rate = fail_count / len(clean_data)
+                    
+                    exc_count = (clean_data > 90).sum()
+                    exc_rate = exc_count / len(clean_data)
+
+                    # 显示
+                    k1, k2 = st.columns(2)
+                    
+                    # 不及格显示 (红色预警 inverse)
+                    k1.metric(
+                        "📉 不及格人数 (<60)", 
+                        f"{fail_count}人 ({fail_rate:.1%})",
+                        delta="需关注" if fail_count > 0 else None,
+                        delta_color="inverse"
+                    )
+                    
+                    # 优秀显示 (绿色鼓励 normal)
+                    k2.metric(
+                        "🌟 优秀人数 (>90)", 
+                        f"{exc_count}人 ({exc_rate:.1%})",
+                        delta="很棒" if exc_count > 0 else None,
+                        delta_color="normal"
+                    )
+
                 else:
                     st.warning("⚠️ 有效数据太少，无法绘图。")
 
@@ -233,14 +250,14 @@ if uploaded_file is not None:
         st.error(f"解析文件出错: {e}")
 
 else:
-    # --- 欢迎页 ---
+    # --- 欢迎页 & 演示模式 ---
     st.info("👋 请在左侧侧边栏上传 Excel 成绩单。")
     
     if st.button("或者：使用演示数据体验"):
         dummy_data = pd.DataFrame({
             '姓名': [f'学生{i}' for i in range(1, 51)],
             '平时成绩': np.random.randint(60, 100, 50),
-            '期末考核(必填)': np.random.normal(75, 10, 50).astype(int)
+            '期末考核(必填)': np.random.normal(75, 12, 50).astype(int)
         })
         
         col1, col2 = st.columns([4, 6], gap="large")
@@ -248,7 +265,6 @@ else:
             st.subheader("📝 数据编辑器 (演示)")
             df_demo = st.data_editor(dummy_data, height=500, use_container_width=True)
             
-            # 演示模式直接导出普通 Excel 即可
             buffer_demo = io.BytesIO()
             with pd.ExcelWriter(buffer_demo, engine='openpyxl') as writer:
                 df_demo.to_excel(writer, index=False)
@@ -267,3 +283,36 @@ else:
             d_clean = df_demo.iloc[:, -1]
             fig, mu, std = draw_chart(d_clean, col_name="期末考核(必填)")
             st.pyplot(fig, use_container_width=True)
+
+            # --- 演示数据：基础统计 ---
+            c1, c2, c3 = st.columns(3)
+            c1.metric("平均分", f"{mu:.2f}")
+            c2.metric("标准差", f"{std:.2f}")
+            c3.metric("有效样本", f"{len(d_clean)}")
+
+            # =================================================
+            # 演示数据：新增不及格与优秀统计
+            # =================================================
+            st.markdown("---")
+            
+            fail_count_demo = (d_clean < 60).sum()
+            fail_rate_demo = fail_count_demo / len(d_clean)
+            
+            exc_count_demo = (d_clean > 90).sum()
+            exc_rate_demo = exc_count_demo / len(d_clean)
+            
+            k1, k2 = st.columns(2)
+            
+            k1.metric(
+                "📉 不及格人数 (<60)", 
+                f"{fail_count_demo}人 ({fail_rate_demo:.1%})",
+                delta="需关注" if fail_count_demo > 0 else None,
+                delta_color="inverse"
+            )
+            
+            k2.metric(
+                "🌟 优秀人数 (>90)", 
+                f"{exc_count_demo}人 ({exc_rate_demo:.1%})",
+                delta="很棒" if exc_count_demo > 0 else None,
+                delta_color="normal"
+            )
