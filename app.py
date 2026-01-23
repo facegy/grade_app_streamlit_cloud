@@ -27,8 +27,8 @@ import os
 # ==========================================
 # 字体设置 (云端部署专用版)
 # ==========================================
-# 尝试加载本地 SimHei，如果没有则使用备选列表
-FONT_FILE = "SimHei.ttf"
+# 尝试加载本地 simhei，如果没有则使用备选列表
+FONT_FILE = "simhei.ttf"
 custom_font = None
 
 if os.path.exists(FONT_FILE):
